@@ -1,0 +1,28 @@
+# Ignore the compiled binary, by default it's stored in the target/ directory
+/target/
+
+# If you're using Cargo (Rust's build system), ignore the following:
+**/*.rs.bk
+Cargo.lock
+
+# If you're using a build script with Cargo, ignore the output file
+/build.rs
+
+# Ignore output binaries, logs, or other debug artifacts.
+*.log
+*.out
+*.err
+
+# If you're using Rust in combination with an IDE (like Visual Studio Code or IntelliJ IDEA),
+# you can also ignore editor-specific files
+# For VSCode:
+.vscode/
+
+# For IntelliJ IDEA (optional):
+.idea/
+
+# For Mac OS (optional):
+.DS_Store
+
+# For Windows (optional):
+Thumbs.db
