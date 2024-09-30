@@ -8,10 +8,16 @@ pub struct IndicatorRegistry {
     groups: HashMap<Group, Vec<dyn Indicator>>,
 }
 
+pub trait AccessorByName {
+    fn get_by_names(&self, names: Vec<&str>) -> Option<Vec<&dyn Indicator>>;
+    fn calculate_by_names(&self, names: Vec<&str>) -> Result<Vec<OutputData>, IndicatorError>;
+}
+
+pub trait AccessorByGroup {
+    fn get_by_groups(&self, groups: Vec<Group>) -> Option<Vec<&dyn Indicator>>;
+    fn calculate_by_groups(&self, groups: Vec<Group>) -> Result<Vec<OutputData>, IndicatorError>;
+}
+
 pub trait Registry {
     fn register_indicator(&mut self, indicator: dyn Indicator);
-    fn get_by_names(&self, names: Vec<&str>) -> Option<Vec<&dyn Indicator>>;
-    fn get_by_groups(&self, groups: Vec<Group>) -> Option<Vec<&dyn Indicator>>;
-    fn calculate_by_names(&self, names: Vec<&str>) -> Result<Vec<OutputData>, IndicatorError>;
-    fn calculate_by_groups(&self, groups: Vec<Group>) -> Result<Vec<OutputData>, IndicatorError>;
 }
