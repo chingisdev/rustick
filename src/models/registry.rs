@@ -4,8 +4,8 @@ use crate::models::groups::Group;
 use crate::models::indicator::{Indicator, IndicatorError};
 
 pub struct IndicatorRegistry {
-    indicators: HashMap<String, Vec<dyn Indicator>>,
-    groups: HashMap<Group, Vec<dyn Indicator>>,
+    indicators: HashMap<String, Vec<Box<dyn Indicator>>>,
+    groups: HashMap<Group, Vec<Box<dyn Indicator>>>,
 }
 
 pub trait AccessorByName {
@@ -19,5 +19,5 @@ pub trait AccessorByGroup {
 }
 
 pub trait Registry {
-    fn register_indicator(&mut self, indicator: dyn Indicator);
+    fn register_indicator(&mut self, indicator: Box<dyn Indicator>);
 }

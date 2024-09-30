@@ -5,14 +5,13 @@ use serde_json::Value;
 
 #[derive(Debug)]
 pub enum IndicatorError {
-    #[error("Invalid parameters: {0}")]
     InvalidParameters(String),
-    #[error("Calculation error: {0}")]
     CalculationError(String),
 }
 
 pub trait Indicator {
-    fn name(&self) -> String;
-    fn groups(&self) -> HashSet<Group>;
+    fn short_name(&self) -> &'static str;
+    fn name(&self) -> &'static str;
+    fn groups(&mut self) -> &HashSet<Group>;
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError>;
 }

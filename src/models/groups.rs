@@ -23,31 +23,46 @@ pub enum UseCase {
     VolumeConfirmation,
     ReversalDetection,
     CycleAnalysis,
-    PatternRecognition,
     SupportResistanceLevels,
     MarketStrengthMeasurement,
     PriceTransformation,
 }
 
-// TODO: discuss that group about mathematical basis. Seems like usecases are mixed here
 /// Groups indicators based on the mathematical techniques or formulas they employ
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum MathematicalBasis {
-    /// Calculating averages over time.
-    MovingAverage,
-    /// Mathematical functions that oscillate within a range.
-    Oscillator,
-    /// Statistical measures of price variability or dispersion.
-    VolatilityMeasure,
-    /// Statistical methods for modeling relationships between variables.
-    RegressionAnalysis,
-    /// Mathematical transformations like normalization or standardization.
-    StatisticalTransformation,
-    /// Decomposing signals into their frequency components.
-    FourierTransform,
-    /// Analyzing the instantaneous attributes of signals.
-    HilbertTransform,
+    /// Techniques involving averaging data points.
+    Averaging,
+    /// Calculations based on ratios and proportions.
+    RatioBased,
+    /// Methods involving summation and accumulation.
+    Summation,
+    /// Statistical measures and transformations.
+    StatisticalMethods,
+    /// Use of oscillatory functions.
+    Oscillation,
+    /// Techniques involving differentiation or rates of change.
+    Differentiation,
+    /// Transform methods like Fourier or Hilbert Transforms.
+    TransformAnalysis,
+    /// Regression and correlation analysis.
+    RegressionCorrelation,
+    /// Signal processing techniques.
+    SignalProcessing,
+    /// Pattern recognition algorithms.
+    PatternRecognition,
+    /// Fractal and geometric methods.
+    FractalGeometry,
+    /// Probability and stochastic processes.
+    ProbabilisticMethods,
+    /// Machine learning and AI algorithms.
+    MachineLearning,
+    /// Volume-weighted calculations.
+    VolumeWeighted,
+    /// Cyclical analysis methods.
+    CyclicalAnalysis,
 }
+
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum DataInputType {
@@ -123,7 +138,9 @@ pub enum SmoothingTechnique {
     SimpleAverage,
     Exponential,
     WeightedMovingAverage,
-    Adaptive
+    Adaptive,
+    Steal,
+    Raw,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
