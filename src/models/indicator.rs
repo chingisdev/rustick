@@ -5,6 +5,7 @@ use serde_json::Value;
 
 #[derive(Debug)]
 pub enum IndicatorError {
+    InvalidInput(String),
     InvalidParameters(String),
     CalculationError(String),
 }
