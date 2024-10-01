@@ -61,16 +61,34 @@ impl Indicator for ChaikinADLine {
             return Err(IndicatorError::InvalidParameters("Input data lengths do not match".to_string()));
         }
 
-        let mut ad_line = Vec::with_capacity(length);
-        let mut cumulative_ad = 0.0;
-        for i in 0..length {
-            let high_low_range = high[i] - low[i];
-            if high_low_range == 0.0 {
-                ad_line.push(cumulative_ad);
-                continue;
-            }
-            cumulative_ad += ((close[i] - low[i]) - (high[i] - close[i])) / high_low_range * volume[i];
-            ad_line.push(cumulative_ad);
+        // Compute the high_low_range (High - Low)
+        let high_low_range = high - low;
+
+        // To avoid division by zero, create a mask where high_low_range == 0.0
+        let zero_range_mask = high_low_range.mapv(|x| x == 0.0);
+
+        // Compute Money Flow Multiplier (MFM)
+        let mfm_numerator = (close - low) - (high - close);
+        let mut mfm = &mfm_numerator / &high_low_range;
+
+        // Handle division by zero by setting MFM to zero where high_low_range == 0
+        mfm.iter_mut()
+            .zip(zero_range_mask.iter())
+            .for_each(|(mfm_value, &is_zero)| {
+                if is_zero {
+                    *mfm_value = 0.0;
+                }
+            });
+
+        // Compute Money Flow Volume (MFV)
+        let mfv = &mfm * volume;
+
+        // Compute Chaikin A/D Line as cumulative sum of MFV
+        let mut ad_line = mfv.clone();
+
+        // Perform cumulative sum
+        for i in 1..length {
+            ad_line[i] += ad_line[i - 1];
         }
 
         Ok(OutputData::SingleSeries(ad_line))
@@ -84,17 +102,18 @@ mod tests {
     use super::*;
     use crate::models::data::{InputData, OutputData};
     use serde_json::Value;
+    use ndarray::array;
 
     #[test]
     fn test_chaikin_ad_line() {
-        // Sample data
-        let high = vec![10.0, 11.0, 12.0, 13.0, 14.0];
-        let low = vec![9.0, 9.5, 10.5, 11.5, 12.5];
-        let close = vec![9.5, 10.5, 11.5, 12.5, 13.5];
-        let volume = vec![1000.0, 1100.0, 1200.0, 1300.0, 1400.0];
+        // Sample data using ndarray arrays
+        let high = array![10.0, 11.0, 12.0, 13.0, 14.0];
+        let low = array![9.0, 9.5, 10.5, 11.5, 12.5];
+        let close = array![9.5, 10.5, 11.5, 12.5, 13.5];
+        let volume = array![1000.0, 1100.0, 1200.0, 1300.0, 1400.0];
 
         let input_data = InputData {
-            open: Some(vec![]),
+            open: None, // Not used in calculation
             high: Some(high),
             low: Some(low),
             close: Some(close),
@@ -110,13 +129,59 @@ mod tests {
 
         if let OutputData::SingleSeries(ad_line) = result {
             // Expected results calculated manually
-            let expected = vec![
+            let expected = array![
                 0.0,        // Day 1
                 366.6667,   // Day 2
                 766.6667,   // Day 3
                 1200.0,     // Day 4
                 1666.6667,  // Day 5
             ];
+
+            // Compare the calculated A/D Line with expected results
+            for (calculated, expected) in ad_line.iter().zip(expected.iter()) {
+                assert!(
+                    (calculated - expected).abs() < 0.0001,
+                    "Calculated value {} does not match expected value {}",
+                    calculated,
+                    expected
+                );
+            }
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_chaikin_ad_line_zero_range() {
+        // Sample data with zero high_low_range on the last day
+        let high = array![10.0, 11.0, 12.0, 13.0, 13.0];
+        let low = array![9.0, 9.5, 10.5, 11.5, 13.0];
+        let close = array![9.5, 10.5, 11.5, 12.5, 13.0];
+        let volume = array![1000.0, 1100.0, 1200.0, 1300.0, 1400.0];
+
+        let input_data = InputData {
+            open: None,
+            high: Some(high),
+            low: Some(low),
+            close: Some(close),
+            volume: Some(volume),
+        };
+
+        let indicator = ChaikinADLine { groups: None };
+
+        let params = Value::Null;
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::SingleSeries(ad_line) = result {
+            // Expected results calculated with zero range handling
+            let expected = array![
+            0.0,        // Day 1
+            366.6667,   // Day 2
+            766.6667,   // Day 3
+            1200.0,     // Day 4
+            1200.0,     // Day 5 (No change)
+        ];
 
             // Compare the calculated A/D Line with expected results
             for (calculated, expected) in ad_line.iter().zip(expected.iter()) {
