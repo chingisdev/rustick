@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use serde_json::Value;
+use crate::indicators::utils::calculate_adl;
 use crate::models::data::{InputData, OutputData};
 use crate::models::groups::{Group, UseCase, MathematicalBasis, DataInputType, SignalType, OutputFormat, TimeframeFocus, ComplexityLevel, MarketSuitability, TradingStrategySuitability, SmoothingTechnique, CalculationMethodology, SignalInterpretation};
 use crate::models::indicator::{Indicator, IndicatorError};
@@ -43,53 +44,25 @@ impl Indicator for ChaikinADLine {
 
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
         let high = data.high.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidParameters("Missing High data".to_string())
+            IndicatorError::InvalidInput("Missing High data".to_string())
         })?;
         let low = data.low.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidParameters("Missing Low data".to_string())
+            IndicatorError::InvalidInput("Missing Low data".to_string())
         })?;
         let close = data.close.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidParameters("Missing Close data".to_string())
+            IndicatorError::InvalidInput("Missing Close data".to_string())
         })?;
         let volume = data.volume.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidParameters("Missing Volume data".to_string())
+            IndicatorError::InvalidInput("Missing Volume data".to_string())
         })?;
 
         let length = high.len();
 
         if low.len() != length || close.len() != length || volume.len() != length {
-            return Err(IndicatorError::InvalidParameters("Input data lengths do not match".to_string()));
+            return Err(IndicatorError::InvalidInput("Input data lengths do not match".to_string()));
         }
 
-        // Compute the high_low_range (High - Low)
-        let high_low_range = high - low;
-
-        // To avoid division by zero, create a mask where high_low_range == 0.0
-        let zero_range_mask = high_low_range.mapv(|x| x == 0.0);
-
-        // Compute Money Flow Multiplier (MFM)
-        let mfm_numerator = (close - low) - (high - close);
-        let mut mfm = &mfm_numerator / &high_low_range;
-
-        // Handle division by zero by setting MFM to zero where high_low_range == 0
-        mfm.iter_mut()
-            .zip(zero_range_mask.iter())
-            .for_each(|(mfm_value, &is_zero)| {
-                if is_zero {
-                    *mfm_value = 0.0;
-                }
-            });
-
-        // Compute Money Flow Volume (MFV)
-        let mfv = &mfm * volume;
-
-        // Compute Chaikin A/D Line as cumulative sum of MFV
-        let mut ad_line = mfv.clone();
-
-        // Perform cumulative sum
-        for i in 1..length {
-            ad_line[i] += ad_line[i - 1];
-        }
+        let ad_line = calculate_adl(high, low, close, volume)?;
 
         Ok(OutputData::SingleSeries(ad_line))
 
