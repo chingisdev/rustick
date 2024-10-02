@@ -13,6 +13,6 @@ pub enum IndicatorError {
 pub trait Indicator {
     fn short_name(&self) -> &'static str;
     fn name(&self) -> &'static str;
-    fn groups(&mut self) -> &HashSet<Group>;
+    fn get_groups(&mut self) -> &HashSet<Group>;
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError>;
 }
