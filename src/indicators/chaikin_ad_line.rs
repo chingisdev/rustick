@@ -18,7 +18,7 @@ impl Indicator for ChaikinADLine {
         "Chaikin Accumulation/Distribution Line"
     }
 
-    fn groups(&mut self) -> &HashSet<Group> {
+    fn get_groups(&mut self) -> &HashSet<Group> {
         if self.groups.is_none() {
             let mut groups = HashSet::new();
             groups.insert(Group::UseCase(UseCase::VolumeConfirmation));
