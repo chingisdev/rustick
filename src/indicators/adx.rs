@@ -3,9 +3,10 @@ use ndarray::{s, Array1};
 use serde::Deserialize;
 use serde_json::Value;
 use crate::indicators::utils::{calculate_directional_movements, calculate_true_range, wilder_smoothing};
-use crate::models::data::{InputData, OutputData};
+use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
+use crate::models::validator::{ParamRule, Validator};
 
 #[derive(Deserialize)]
 struct ADXParams {
@@ -19,7 +20,58 @@ fn default_period() -> usize {
 
 
 pub struct ADX {
-    groups: Option<HashSet<Group>>
+    groups: HashSet<Group>,
+    validator: Validator,
+}
+
+fn create_groups() -> HashSet<Group> {
+    let mut groups = HashSet::new();
+    groups.insert(Group::UseCase(UseCase::TrendIdentification));
+    groups.insert(Group::UseCase(UseCase::MarketStrengthMeasurement));
+    groups.insert(Group::MathematicalBasis(MathematicalBasis::Averaging));
+    groups.insert(Group::MathematicalBasis(MathematicalBasis::RatioBased));
+    groups.insert(Group::DataInputType(DataInputType::PriceBased));
+    groups.insert(Group::SignalType(SignalType::Lagging));
+    groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
+    groups.insert(Group::TimeframeFocus(TimeframeFocus::Short));
+    groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
+    groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
+    groups.insert(Group::MarketSuitability(MarketSuitability::Trending));
+    groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Swing));
+    groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Intraday));
+    groups.insert(Group::SmoothingTechnique(SmoothingTechnique::Exponential));
+    groups.insert(Group::CalculationMethodology(CalculationMethodology::Ratio));
+    groups.insert(Group::SignalInterpretation(SignalInterpretation::ThresholdLevels));
+    groups
+}
+
+fn create_validator() -> Validator {
+    Validator::new(
+        vec![BarField::HIGH, BarField::LOW, BarField::CLOSE],
+        vec![
+            ParamRule::Required("period"),
+            ParamRule::PositiveInteger("period"),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| {
+                let period = value.get("period").and_then(|v| v.as_i64()).unwrap();
+                let high = data.get_by_bar_field(&BarField::CLOSE).unwrap();
+                if period > high.len() as i64 {
+                    Err(IndicatorError::InvalidParameters(format!("Period must be less than or equal to the length of the data. Period: {}, Data Length: {}", period, high.len())))
+                } else {
+                    Ok(())
+                }
+            })),
+        ]
+    )
+}
+
+impl ADX {
+    pub fn new() -> Self {
+        let validator = create_validator();
+
+        let groups = create_groups();
+
+        Self { groups, validator }
+    }
 }
 
 impl Indicator for ADX {
@@ -30,66 +82,20 @@ impl Indicator for ADX {
         "Average Directional Index"
     }
     fn get_groups(&mut self) -> &HashSet<Group> {
-        if self.groups.is_none() {
-            let mut groups = HashSet::new();
-            groups.insert(Group::UseCase(UseCase::TrendIdentification));
-            groups.insert(Group::UseCase(UseCase::MarketStrengthMeasurement));
-            groups.insert(Group::MathematicalBasis(MathematicalBasis::Averaging));
-            groups.insert(Group::MathematicalBasis(MathematicalBasis::RatioBased));
-            groups.insert(Group::DataInputType(DataInputType::PriceBased));
-            groups.insert(Group::SignalType(SignalType::Lagging));
-            groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
-            groups.insert(Group::TimeframeFocus(TimeframeFocus::Short));
-            groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
-            groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
-            groups.insert(Group::MarketSuitability(MarketSuitability::Trending));
-            groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Swing));
-            groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Intraday));
-            groups.insert(Group::SmoothingTechnique(SmoothingTechnique::Exponential));
-            groups.insert(Group::CalculationMethodology(CalculationMethodology::Ratio));
-            groups.insert(Group::SignalInterpretation(SignalInterpretation::ThresholdLevels));
-            self.groups = Some(groups);
-        }
-        self.groups.as_ref().unwrap()
+        &self.groups
     }
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
         // Parse parameters
+        self.validator.validate(data, &params)?;
+
         let params: ADXParams = serde_json::from_value(params)
             .map_err(|e| IndicatorError::InvalidParameters(e.to_string()))?;
 
-        // Validate period
-        if params.period == 0 {
-            return Err(IndicatorError::InvalidParameters(
-                "Period must be a positive integer".to_string(),
-            ));
-        }
-
-        // Validate input data
-        let high = data.high.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("High price data is required.".to_string())
-        })?;
-
-        let low = data.low.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Low price data is required.".to_string())
-        })?;
-
-        let close = data.close.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Close price data is required.".to_string())
-        })?;
-
+        let high = data.get_by_bar_field(&BarField::HIGH).unwrap();
+        let low = data.get_by_bar_field(&BarField::LOW).unwrap();
+        let close = data.get_by_bar_field(&BarField::CLOSE).unwrap();
         let length = high.len();
 
-        if low.len() != length || close.len() != length {
-            return Err(IndicatorError::InvalidInput(
-                "Input data series must have the same length.".to_string(),
-            ));
-        }
-
-        if length < params.period {
-            return Err(IndicatorError::InvalidInput(
-                "Input data length must be at least equal to the period".to_string(),
-            ));
-        }
 
         // Step 1: Calculate True Range (TR)
         let tr = calculate_true_range(high, low, close)?;
@@ -120,24 +126,28 @@ impl Indicator for ADX {
         // Initialize the full ADX array with NaNs
         let mut full_adx = Array1::<f64>::from_elem(length, f64::NAN);
 
-        // Determine the starting index for valid ADX values
-        let start_index = 2 * (params.period - 1);
+        if length < params.period {
+            Ok(OutputData::SingleSeries(full_adx))
+        } else {
+            // Determine the starting index for valid ADX values
+            let start_index = 2 * (params.period - 1);
 
-        // Take slices of adx and full_adx starting from start_index
-        let valid_adx = adx.slice(s![start_index..]);
-        let valid_length = valid_adx.len();
+            // Take slices of adx and full_adx starting from start_index
+            let valid_adx = adx.slice(s![start_index..]);
+            let valid_length = valid_adx.len();
 
-        if start_index + valid_length > length {
-            return Err(IndicatorError::CalculationError(
-                "Calculated ADX length exceeds input data length.".to_string(),
-            ));
+            if start_index + valid_length > length {
+                return Err(IndicatorError::CalculationError(
+                    "Calculated ADX length exceeds input data length.".to_string(),
+                ));
+            }
+
+            // Assign valid ADX values to full_adx starting from start_index
+            full_adx.slice_mut(s![start_index..start_index + valid_length])
+                .assign(&valid_adx);
+
+            Ok(OutputData::SingleSeries(full_adx))
         }
-
-        // Assign valid ADX values to full_adx starting from start_index
-        full_adx.slice_mut(s![start_index..start_index + valid_length])
-            .assign(&valid_adx);
-
-        Ok(OutputData::SingleSeries(full_adx))
     }
 }
 
@@ -164,7 +174,7 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 3 });
 
@@ -198,7 +208,7 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 0 });
 
@@ -206,7 +216,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidParameters(msg)) if msg == "Period must be a positive integer"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Parameter 'period' must be a positive integer"
         ));
     }
 
@@ -225,15 +235,14 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 5 });
 
         let result = indicator.calculate(&input_data, params);
-
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data length must be at least equal to the period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Period must be less than or equal to the length of the data. Period: 5, Data Length: 3"
         ));
     }
 
@@ -251,7 +260,7 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 2 });
 
@@ -259,7 +268,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data series must have the same length."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data series of the bars must have the same length."
         ));
     }
 
@@ -276,15 +285,14 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 2 });
 
         let result = indicator.calculate(&input_data, params);
-
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "High price data is required."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Field 'HIGH' is required but missing."
         ));
     }
 
@@ -302,15 +310,14 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 14 });
 
         let result = indicator.calculate(&input_data, params);
-
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data length must be at least equal to the period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Period must be less than or equal to the length of the data. Period: 14, Data Length: 0"
         ));
     }
 
@@ -329,7 +336,7 @@ mod tests {
             volume: None,
         };
 
-        let indicator = ADX {groups: None};
+        let indicator = ADX::new();
 
         let params = json!({ "period": 3 });
 
