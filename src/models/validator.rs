@@ -1,0 +1,142 @@
+use serde_json::Value;
+use crate::models::data::{BarField, InputData};
+use crate::models::indicator::IndicatorError;
+
+pub struct Validator {
+    candle_validator: CandleValidator,
+    parameter_validator: ParameterValidator
+}
+
+pub struct CandleValidator {
+    pub required_fields: Vec<BarField>,
+}
+
+pub struct ParameterValidator {
+    pub param_rules: Vec<ParamRule>,
+}
+
+impl CandleValidator {
+    fn is_field_missing(data: &InputData, field: &BarField) -> bool {
+        data.get_by_bar_field(field).is_none()
+    }
+
+    fn validate_required_fields_presence(&self, data: &InputData) -> Result<(), IndicatorError> {
+        for &field in &self.required_fields {
+            if self.is_field_missing(data, &field) {
+                let field_missing_error = format!("Field '{}' is required but missing", &field.to_str());
+                return Err(IndicatorError::InvalidInput(field_missing_error));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_same_length(&self, data: &InputData) -> Result<(), IndicatorError> {
+        let lengths = self.required_fields.iter().filter_map(
+            |&field| data.get_by_bar_field(&field).map(|arr| arr.len())
+        ).collect();
+        if lengths.windows(2).any(|w| w[0] != w[1]) {
+            Err(IndicatorError::InvalidInput("Input data series of the bars must have the same length.".to_string()))
+        }
+    }
+
+    pub fn validate_candle(&self, data: &InputData) -> Result<(), IndicatorError> {
+        self.validate_required_fields_presence(data)?;
+        self.validate_same_length(data)?;
+        Ok(())
+    }
+}
+
+impl ParameterValidator {
+    fn validate_required_param(&self, params: &Value, param_name: &str) -> Result<(), IndicatorError> {
+        if params.get(param_name).is_none() {
+            Err(IndicatorError::InvalidParameters(
+                format!("Parameter '{}' does not exist", param_name),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_positive_integer_param(&self, params: &Value, param_name: &str) -> Result<(), IndicatorError> {
+        if let Some(value) = params.get(param_name).and_then(|v| v.as_i64()) {
+            if value > 0 {
+                Ok(())
+            } else {
+                Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be a positive integer", param_name)))
+            }
+        } else {
+            Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be a positive integer", param_name)))
+        }
+    }
+
+    fn validate_correct_period(&self, params: &Value, left: &str, right: &str) -> Result<(), IndicatorError> {
+        if let Some(left) = params.get(left).and_then(|v| v.as_i64()) {
+            if let Some(right) = params.get(right).and_then(|v| v.as_i64()) {
+                if left < right {
+                    Ok(())
+                } else {
+                    Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be less than '{}'", left, right)))
+                }
+            } else {
+                Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be a positive integer", right)))
+            }
+        } else {
+            Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be a positive integer", left)))
+        }
+    }
+
+    fn validate_less_than_data(&self, params: &Value, param_name: &str, data_len: &i64) -> Result<(), IndicatorError> {
+        if let Some(value) = params.get(param_name).and_then(|v| v.as_i64()) {
+            if value < *data_len {
+                Ok(())
+            } else {
+                Err(IndicatorError::InvalidParameters(
+                    format!("Parameter '{}' must be less than {}.", param_name, data_len),
+                ))
+            }
+        } else {
+            Err(IndicatorError::InvalidParameters(
+                format!("Parameter '{}' must be a number.", param_name),
+            ))
+        }
+    }
+
+    fn validate_params(&self, params: &Value) -> Result<(), IndicatorError> {
+        for rule in &self.param_rules {
+            match rule {
+                ParamRule::Required(param_name) => self.validate_required_param(params, param_name)?,
+                ParamRule::PositiveInteger(param_name) => self.validate_positive_integer_param(params, param_name)?,
+                ParamRule::CorrectPeriod { left, right } => self.validate_correct_period(params, left, right)?,
+                ParamRule::LessThanData {param, data_len } => self.validate_less_than_data(params, param, data_len)?,
+                ParamRule::Custom(func) => {
+                    func(params)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Validator {
+    pub fn new(required_fields: Vec<BarField>, param_rules: Vec<ParamRule>) -> Self {
+        Validator {
+            candle_validator: CandleValidator { required_fields },
+            parameter_validator: ParameterValidator { param_rules },
+        }
+    }
+
+    pub fn validate(&self, data: &InputData, params: &Value) -> Result<(), IndicatorError> {
+        self.candle_validator.validate_candle(data)?;
+        self.parameter_validator.validate_params(params)?;
+        Ok(())
+    }
+}
+
+pub enum ParamRule {
+    Required(&'static str),
+    PositiveInteger(&'static str),
+    CorrectPeriod { left: &'static str, right: &'static str },
+    LessThanData { param: &'static str, data_len: i64 },
+    Custom(Box<dyn Fn(&Value) -> Result<(), IndicatorError>>),
+}
