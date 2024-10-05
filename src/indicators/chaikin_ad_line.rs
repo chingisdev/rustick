@@ -1,12 +1,49 @@
 use std::collections::HashSet;
 use serde_json::Value;
 use crate::indicators::utils::calculate_adl;
-use crate::models::data::{InputData, OutputData};
+use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{Group, UseCase, MathematicalBasis, DataInputType, SignalType, OutputFormat, TimeframeFocus, ComplexityLevel, MarketSuitability, TradingStrategySuitability, SmoothingTechnique, CalculationMethodology, SignalInterpretation};
 use crate::models::indicator::{Indicator, IndicatorError};
+use crate::models::validator::Validator;
 
 pub struct ChaikinADLine {
-    groups: Option<HashSet<Group>>
+    groups: HashSet<Group>,
+    validator: Validator
+}
+
+fn create_groups() -> HashSet<Group> {
+    let mut groups = HashSet::new();
+    groups.insert(Group::UseCase(UseCase::VolumeConfirmation));
+    groups.insert(Group::UseCase(UseCase::MarketStrengthMeasurement));
+    groups.insert(Group::MathematicalBasis(MathematicalBasis::VolumeWeighted));
+    groups.insert(Group::DataInputType(DataInputType::PriceVolumeCombined));
+    groups.insert(Group::SignalType(SignalType::Leading));
+    groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
+    groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
+    groups.insert(Group::TimeframeFocus(TimeframeFocus::Long));
+    groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
+    groups.insert(Group::MarketSuitability(MarketSuitability::Trending));
+    groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Swing));
+    groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Positional));
+    groups.insert(Group::SmoothingTechnique(SmoothingTechnique::Raw));
+    groups.insert(Group::CalculationMethodology(CalculationMethodology::Cumulative));
+    groups.insert(Group::SignalInterpretation(SignalInterpretation::Divergence));
+    groups
+}
+
+fn create_validator() -> Validator {
+    Validator::new(
+        vec![BarField::CLOSE, BarField::HIGH, BarField::LOW, BarField::VOLUME],
+        vec![]
+    )
+}
+
+impl ChaikinADLine {
+    pub fn new() -> Self {
+        let validator = create_validator();
+        let groups = create_groups();
+        Self { groups, validator }
+    }
 }
 
 impl Indicator for ChaikinADLine {
@@ -19,48 +56,14 @@ impl Indicator for ChaikinADLine {
     }
 
     fn get_groups(&mut self) -> &HashSet<Group> {
-        if self.groups.is_none() {
-            let mut groups = HashSet::new();
-            groups.insert(Group::UseCase(UseCase::VolumeConfirmation));
-            groups.insert(Group::UseCase(UseCase::MarketStrengthMeasurement));
-            groups.insert(Group::MathematicalBasis(MathematicalBasis::VolumeWeighted));
-            groups.insert(Group::DataInputType(DataInputType::PriceVolumeCombined));
-            groups.insert(Group::SignalType(SignalType::Leading));
-            groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
-            groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
-            groups.insert(Group::TimeframeFocus(TimeframeFocus::Long));
-            groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
-            groups.insert(Group::MarketSuitability(MarketSuitability::Trending));
-            groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Swing));
-            groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Positional));
-            groups.insert(Group::SmoothingTechnique(SmoothingTechnique::Raw));
-            groups.insert(Group::CalculationMethodology(CalculationMethodology::Cumulative));
-            groups.insert(Group::SignalInterpretation(SignalInterpretation::Divergence));
-
-            self.groups = Some(groups);
-        }
-        self.groups.as_ref().unwrap()
+        &self.groups
     }
 
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
-        let high = data.high.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Missing High data".to_string())
-        })?;
-        let low = data.low.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Missing Low data".to_string())
-        })?;
-        let close = data.close.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Missing Close data".to_string())
-        })?;
-        let volume = data.volume.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Missing Volume data".to_string())
-        })?;
-
-        let length = high.len();
-
-        if low.len() != length || close.len() != length || volume.len() != length {
-            return Err(IndicatorError::InvalidInput("Input data lengths do not match".to_string()));
-        }
+        let high = data.get_by_bar_field(&BarField::HIGH).unwrap();
+        let low = data.get_by_bar_field(&BarField::LOW).unwrap();
+        let close = data.get_by_bar_field(&BarField::CLOSE).unwrap();
+        let volume = data.get_by_bar_field(&BarField::VOLUME).unwrap();
 
         let ad_line = calculate_adl(high, low, close, volume)?;
 
@@ -93,7 +96,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADLine { groups: None };
+        let indicator = ChaikinADLine::new();
 
         // No parameters are needed for Chaikin A/D Line
         let params = Value::Null;
@@ -140,7 +143,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADLine { groups: None };
+        let indicator = ChaikinADLine::new();
 
         let params = Value::Null;
 
