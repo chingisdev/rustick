@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use ndarray::{s, Array1};
 use serde::Deserialize;
 use serde_json::Value;
-use crate::indicators::utils::{calculate_directional_movements, calculate_true_range, wilder_smoothing};
+use crate::indicators::utils::{calculate_directional_movements, calculate_true_range, validate_period_less_than_data, wilder_smoothing};
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
@@ -45,21 +45,15 @@ fn create_groups() -> HashSet<Group> {
     groups
 }
 
+
+
 fn create_validator() -> Validator {
     Validator::new(
         vec![BarField::HIGH, BarField::LOW, BarField::CLOSE],
         vec![
             ParamRule::Required("period"),
             ParamRule::PositiveInteger("period"),
-            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| {
-                let period = value.get("period").and_then(|v| v.as_i64()).unwrap();
-                let high = data.get_by_bar_field(&BarField::CLOSE).unwrap();
-                if period > high.len() as i64 {
-                    Err(IndicatorError::InvalidParameters(format!("Period must be less than or equal to the length of the data. Period: {}, Data Length: {}", period, high.len())))
-                } else {
-                    Ok(())
-                }
-            })),
+            ParamRule::Custom(Box::new(validate_period_less_than_data)),
         ]
     )
 }
