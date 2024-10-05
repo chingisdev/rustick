@@ -1,4 +1,6 @@
 use ndarray::{s, Array1};
+use serde_json::Value;
+use crate::models::data::{BarField, InputData};
 use crate::models::indicator::IndicatorError;
 
 pub fn calculate_adl(
@@ -154,6 +156,16 @@ pub fn wilder_smoothing(
     Ok(smoothed)
 }
 
+pub fn validate_period_less_than_data(value: &Value, data: &InputData) -> Result<(), IndicatorError> {
+    let period = value.get("period").and_then(|v| v.as_i64()).unwrap();
+    let high = data.get_by_bar_field(&BarField::CLOSE).unwrap();
+    if period > high.len() as i64 {
+        Err(IndicatorError::InvalidParameters(format!("Period must be less than or equal to the length of the data. Period: {}, Data Length: {}", period, high.len())))
+    } else {
+        Ok(())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -194,5 +206,4 @@ mod tests {
             }
         }
     }
-
 }
