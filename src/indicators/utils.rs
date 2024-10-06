@@ -156,11 +156,11 @@ pub fn wilder_smoothing(
     Ok(smoothed)
 }
 
-pub fn validate_period_less_than_data(value: &Value, data: &InputData) -> Result<(), IndicatorError> {
-    let period = value.get("period").and_then(|v| v.as_i64()).unwrap();
-    let high = data.get_by_bar_field(&BarField::CLOSE).unwrap();
-    if period > high.len() as i64 {
-        Err(IndicatorError::InvalidParameters(format!("Period must be less than or equal to the length of the data. Period: {}, Data Length: {}", period, high.len())))
+pub fn validate_period_less_than_data(value: &Value, data: &InputData, field: &str, bar_field: BarField) -> Result<(), IndicatorError> {
+    let period = value.get(field).and_then(|v| v.as_i64()).unwrap();
+    let input_field = data.get_by_bar_field(&bar_field).unwrap();
+    if period > input_field.len() as i64 {
+        Err(IndicatorError::InvalidParameters(format!("Wrong parameter length. '{}' > data length. ({} > {})", field, period, input_field.len())))
     } else {
         Ok(())
     }
