@@ -1,18 +1,20 @@
 use std::collections::HashSet;
 use ndarray::{s, Array1};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::indicators::utils::{calculate_directional_movements, calculate_true_range, validate_period_less_than_data, wilder_smoothing};
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
-use crate::models::validator::{ParamRule, Validator};
+use crate::validation::validator::{IParameter, ParamRule, Validator};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ADXParams {
     #[serde(default = "default_period")]
     period: usize,
 }
+
+impl IParameter for ADXParams {}
 
 fn default_period() -> usize {
     14
@@ -53,7 +55,7 @@ fn create_validator() -> Validator {
         vec![
             ParamRule::Required("period"),
             ParamRule::PositiveInteger("period"),
-            ParamRule::Custom(Box::new(validate_period_less_than_data)),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "period", BarField::HIGH))),
         ]
     )
 }
@@ -80,10 +82,11 @@ impl Indicator for ADX {
     }
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
         // Parse parameters
-        self.validator.validate(data, &params)?;
 
         let params: ADXParams = serde_json::from_value(params)
             .map_err(|e| IndicatorError::InvalidParameters(e.to_string()))?;
+
+        self.validator.validate(data, &params)?;
 
         let high = data.get_by_bar_field(&BarField::HIGH).unwrap();
         let low = data.get_by_bar_field(&BarField::LOW).unwrap();
@@ -236,7 +239,7 @@ mod tests {
         let result = indicator.calculate(&input_data, params);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidParameters(msg)) if msg == "Period must be less than or equal to the length of the data. Period: 5, Data Length: 3"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Wrong parameter length. 'period' > data length. (5 > 3)"
         ));
     }
 
@@ -309,9 +312,10 @@ mod tests {
         let params = json!({ "period": 14 });
 
         let result = indicator.calculate(&input_data, params);
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidParameters(msg)) if msg == "Period must be less than or equal to the length of the data. Period: 14, Data Length: 0"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Wrong parameter length. 'period' > data length. (14 > 0)"
         ));
     }
 

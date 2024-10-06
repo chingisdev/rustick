@@ -1,20 +1,22 @@
 use std::collections::HashSet;
 use ndarray::s;
 use serde_json::Value;
-use serde::Deserialize;
-use crate::indicators::utils::{calculate_adl, calculate_ema};
-use crate::models::data::{InputData, OutputData};
+use serde::{Deserialize, Serialize};
+use crate::indicators::utils::{calculate_adl, calculate_ema, validate_period_less_than_data};
+use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
+use crate::validation::validator::{IParameter, ParamRule, Validator};
 
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ChaikinOscillatorParams {
     #[serde(default = "default_short_period")]
     short_period: usize,
     #[serde(default = "default_long_period")]
     long_period: usize,
 }
+
+impl IParameter for ChaikinOscillatorParams {}
 
 fn default_short_period() -> usize {
     3
@@ -26,7 +28,56 @@ fn default_long_period() -> usize {
 
 
 pub struct ChaikinADOscillator {
-    groups: Option<HashSet<Group>>,
+    groups: HashSet<Group>,
+    validator: Validator,
+}
+
+fn create_validator() -> Validator {
+    Validator::new(
+        vec![
+            BarField::HIGH, BarField::LOW, BarField::CLOSE, BarField::VOLUME
+        ],
+        vec![
+            ParamRule::Required("short_period"),
+            ParamRule::Required("long_period"),
+            ParamRule::PositiveInteger("short_period"),
+            ParamRule::PositiveInteger("long_period"),
+            ParamRule::CorrectPeriod {left: "short_period", right: "long_period"},
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "short_period", BarField::HIGH))),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "long_period", BarField::HIGH))),
+        ],
+    )
+}
+
+impl ChaikinADOscillator {
+    pub fn new() -> Self {
+        let groups = create_groups();
+        let validator = create_validator();
+        Self { groups, validator }
+    }
+}
+
+fn create_groups() -> HashSet<Group> {
+    let mut groups = HashSet::new();
+    groups.insert(Group::UseCase(UseCase::MomentumDetection));
+    groups.insert(Group::UseCase(UseCase::VolumeConfirmation));
+    groups.insert(Group::MathematicalBasis(MathematicalBasis::Differentiation));
+    groups.insert(Group::MathematicalBasis(MathematicalBasis::VolumeWeighted));
+    groups.insert(Group::DataInputType(DataInputType::PriceVolumeCombined));
+    groups.insert(Group::SignalType(SignalType::Leading));
+    groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
+    groups.insert(Group::TimeframeFocus(TimeframeFocus::Short));
+    groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
+    groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
+    groups.insert(Group::MarketSuitability(MarketSuitability::Trending));
+    groups.insert(Group::MarketSuitability(MarketSuitability::RangeBound));
+    groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Intraday));
+    groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Swing));
+    groups.insert(Group::SmoothingTechnique(SmoothingTechnique::Exponential));
+    groups.insert(Group::CalculationMethodology(CalculationMethodology::Differential));
+    groups.insert(Group::SignalInterpretation(SignalInterpretation::Crossovers));
+    groups.insert(Group::SignalInterpretation(SignalInterpretation::Divergence));
+    groups
 }
 
 impl Indicator for ChaikinADOscillator {
@@ -39,80 +90,19 @@ impl Indicator for ChaikinADOscillator {
     }
 
     fn get_groups(&mut self) -> &HashSet<Group> {
-        if self.groups.is_none() {
-            let mut groups = HashSet::new();
-            groups.insert(Group::UseCase(UseCase::MomentumDetection));
-            groups.insert(Group::UseCase(UseCase::VolumeConfirmation));
-            groups.insert(Group::MathematicalBasis(MathematicalBasis::Differentiation));
-            groups.insert(Group::MathematicalBasis(MathematicalBasis::VolumeWeighted));
-            groups.insert(Group::DataInputType(DataInputType::PriceVolumeCombined));
-            groups.insert(Group::SignalType(SignalType::Leading));
-            groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
-            groups.insert(Group::TimeframeFocus(TimeframeFocus::Short));
-            groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
-            groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
-            groups.insert(Group::MarketSuitability(MarketSuitability::Trending));
-            groups.insert(Group::MarketSuitability(MarketSuitability::RangeBound));
-            groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Intraday));
-            groups.insert(Group::TradingStrategySuitability(TradingStrategySuitability::Swing));
-            groups.insert(Group::SmoothingTechnique(SmoothingTechnique::Exponential));
-            groups.insert(Group::CalculationMethodology(CalculationMethodology::Differential));
-            groups.insert(Group::SignalInterpretation(SignalInterpretation::Crossovers));
-            groups.insert(Group::SignalInterpretation(SignalInterpretation::Divergence));
-
-            self.groups = Some(groups);
-        }
-        self.groups.as_ref().unwrap()
+        &self.groups
     }
 
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
-        // Parse parameters
         let params: ChaikinOscillatorParams = serde_json::from_value(params)
             .map_err(|e| IndicatorError::InvalidParameters(e.to_string()))?;
 
-        // Validate periods
-        if params.short_period == 0 || params.long_period == 0 {
-            return Err(IndicatorError::InvalidParameters(
-                "Periods must be positive integers".to_string(),
-            ));
-        }
+        self.validator.validate(data, &params)?;
 
-        if params.short_period >= params.long_period {
-            return Err(IndicatorError::InvalidParameters(
-                "Short period must be less than long period".to_string(),
-            ));
-        }
-
-        // Validate input data
-        let high = data.high.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("High price data is required.".to_string())
-        })?;
-
-        let low = data.low.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Low price data is required.".to_string())
-        })?;
-
-        let close = data.close.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Close price data is required.".to_string())
-        })?;
-
-        let volume = data.volume.as_ref().ok_or_else(|| {
-            IndicatorError::InvalidInput("Volume data is required.".to_string())
-        })?;
-
-        let length = high.len();
-
-        if low.len() != length || close.len() != length || volume.len() != length {
-            return Err(IndicatorError::InvalidInput(
-                "Input data series must have the same length.".to_string(),
-            ));
-        }
-
-        if low.len() < params.long_period || high.len() < params.long_period || close.len() < params.long_period || volume.len() < params.long_period {
-            return Err(IndicatorError::InvalidInput(
-                "Input data length must be at least equal to the long period".to_string(),
-            ));
-        }
+        let high = data.get_by_bar_field(&BarField::HIGH).unwrap();
+        let low = data.get_by_bar_field(&BarField::LOW).unwrap();
+        let close = data.get_by_bar_field(&BarField::CLOSE).unwrap();
+        let volume = data.get_by_bar_field(&BarField::VOLUME).unwrap();
 
         // Step 1: Calculate the Accumulation/Distribution Line (ADL)
         let adl = calculate_adl(high, low, close, volume)?;
@@ -121,9 +111,7 @@ impl Indicator for ChaikinADOscillator {
         let short_ema = calculate_ema(&adl, params.short_period)?;
         let long_ema = calculate_ema(&adl, params.long_period)?;
 
-        // Ensure that both EMAs have the same length (starting from the point where both EMAs have values)
         let start_index = params.long_period - 1;
-
         let oscillator_values = &short_ema.slice(s![start_index..]) - &long_ema.slice(s![start_index..]);
 
         Ok(OutputData::SingleSeries(oscillator_values.to_owned()))
@@ -153,13 +141,13 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Use default parameters
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params).unwrap();
-
+        println!("{:?}", result);
         if let OutputData::SingleSeries(chaikin_osc) = result {
             // Expected results would be calculated from a trusted source or precomputed
             // For demonstration, we'll print the values
@@ -181,7 +169,7 @@ mod tests {
         let high = array![10.0, 11.0, 12.0, 13.0, 14.0];
         let low = array![9.0, 10.0, 11.0, 12.0, 13.0];
         let close = array![9.5, 10.5, 11.5, 12.5, 13.5];
-        let volume = array![1000.0, 5.0];
+        let volume = array![1000.0, 5.0, 12.0, 13.0, 14.0];
 
         let input_data = InputData {
             open: None,
@@ -191,14 +179,14 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Set short_period to zero
         let params = json!({ "short_period": 0, "long_period": 3 });
 
         let result = indicator.calculate(&input_data, params);
-
-        assert!(matches!(result, Err(IndicatorError::InvalidParameters(msg)) if msg == "Periods must be positive integers"));
+        println!("{:?}", result);
+        assert!(matches!(result, Err(IndicatorError::InvalidParameters(msg)) if msg == "Parameter 'short_period' must be a positive integer"));
     }
 
     #[test]
@@ -207,7 +195,7 @@ mod tests {
         let high = array![10.0, 11.0, 12.0];
         let low = array![9.0, 10.0, 11.0];
         let close = array![9.5, 10.5, 11.5];
-        let volume = array![1000.0, 3.0];
+        let volume = array![1000.0, 3.0, 5.0];
 
         let input_data = InputData {
             open: None,
@@ -217,16 +205,16 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Set long_period to zero
         let params = json!({ "short_period": 2, "long_period": 0 });
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
         result,
-        Err(IndicatorError::InvalidParameters(msg)) if msg == "Periods must be positive integers"
+        Err(IndicatorError::InvalidParameters(msg)) if msg == "Parameter 'long_period' must be a positive integer"
     ));
     }
 
@@ -236,7 +224,7 @@ mod tests {
         let high = array![10.0, 11.0, 12.0, 13.0];
         let low = array![9.0, 10.0, 11.0, 12.0];
         let close = array![9.5, 10.5, 11.5, 12.5];
-        let volume = array![1000.0, 4.0];
+        let volume = array![1000.0, 4.0, 12.0, 13.0];
 
         let input_data = InputData {
             open: None,
@@ -246,16 +234,16 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Set short_period equal to long_period
         let params = json!({ "short_period": 3, "long_period": 3 });
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidParameters(msg)) if msg == "Short period must be less than long period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Parameter 'short_period' must be less than 'long_period'"
         ));
     }
 
@@ -275,16 +263,16 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Set short_period greater than data length
         let params = json!({ "short_period": 5, "long_period": 6 });
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data length must be at least equal to the long period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Wrong parameter length. 'short_period' > data length. (5 > 3)"
         ));
     }
 
@@ -305,16 +293,16 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Set long_period greater than data length
         let params = json!({ "short_period": 2, "long_period": 5 });
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data length must be at least equal to the long period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Wrong parameter length. 'long_period' > data length. (5 > 3)"
         ));
     }
 
@@ -335,15 +323,15 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data series must have the same length."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data series of the bars must have the same length."
         ));
     }
 
@@ -363,15 +351,15 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "High price data is required."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Field 'HIGH' is required but missing."
         ));
     }
 
@@ -390,15 +378,15 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Low price data is required."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Field 'LOW' is required but missing."
         ));
     }
 
@@ -417,15 +405,15 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Close price data is required."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Field 'CLOSE' is required but missing."
         ));
     }
 
@@ -444,15 +432,15 @@ mod tests {
             volume: None, // Missing
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Volume data is required."
+            Err(IndicatorError::InvalidInput(msg)) if msg == "Field 'VOLUME' is required but missing."
         ));
     }
 
@@ -472,16 +460,16 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         // Default periods are 3 and 10, but data length is 2
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data length must be at least equal to the long period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Wrong parameter length. 'short_period' > data length. (3 > 2)"
         ));
     }
 
@@ -501,15 +489,15 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator { groups: None };
+        let indicator = ChaikinADOscillator::new();
 
         let params = json!({});
 
         let result = indicator.calculate(&input_data, params);
-
+        println!("{:?}", result);
         assert!(matches!(
             result,
-            Err(IndicatorError::InvalidInput(msg)) if msg == "Input data length must be at least equal to the long period"
+            Err(IndicatorError::InvalidParameters(msg)) if msg == "Wrong parameter length. 'short_period' > data length. (3 > 0)"
         ));
     }
 }

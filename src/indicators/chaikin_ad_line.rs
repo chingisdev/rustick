@@ -4,7 +4,7 @@ use crate::indicators::utils::calculate_adl;
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{Group, UseCase, MathematicalBasis, DataInputType, SignalType, OutputFormat, TimeframeFocus, ComplexityLevel, MarketSuitability, TradingStrategySuitability, SmoothingTechnique, CalculationMethodology, SignalInterpretation};
 use crate::models::indicator::{Indicator, IndicatorError};
-use crate::models::validator::Validator;
+use crate::validation::validator::Validator;
 
 pub struct ChaikinADLine {
     groups: HashSet<Group>,
@@ -60,6 +60,7 @@ impl Indicator for ChaikinADLine {
     }
 
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
+        self.validator.validate_data(data)?;
         let high = data.get_by_bar_field(&BarField::HIGH).unwrap();
         let low = data.get_by_bar_field(&BarField::LOW).unwrap();
         let close = data.get_by_bar_field(&BarField::CLOSE).unwrap();
