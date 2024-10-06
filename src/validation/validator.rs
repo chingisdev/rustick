@@ -1,4 +1,5 @@
 use ndarray::Array1;
+use serde::Serialize;
 use serde_json::Value;
 use crate::models::data::{BarField, InputData};
 use crate::models::indicator::IndicatorError;
@@ -14,6 +15,12 @@ pub struct CandleValidator {
 
 pub struct ParameterValidator {
     pub param_rules: Vec<ParamRule>,
+}
+
+pub trait IParameter {
+    fn to_value(&self) -> Value where Self: Serialize {
+        serde_json::to_value(self).unwrap()
+    }
 }
 
 impl CandleValidator {
@@ -79,9 +86,9 @@ impl ParameterValidator {
     }
 
     fn validate_correct_period(&self, params: &Value, left: &str, right: &str) -> Result<(), IndicatorError> {
-        if let Some(left) = params.get(left).and_then(|v| v.as_i64()) {
-            if let Some(right) = params.get(right).and_then(|v| v.as_i64()) {
-                if left < right {
+        if let Some(left_number) = params.get(left).and_then(|v| v.as_i64()) {
+            if let Some(right_number) = params.get(right).and_then(|v| v.as_i64()) {
+                if left_number < right_number {
                     Ok(())
                 } else {
                     Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be less than '{}'", left, right)))
@@ -134,9 +141,19 @@ impl Validator {
         }
     }
 
-    pub fn validate(&self, data: &InputData, params: &Value) -> Result<(), IndicatorError> {
+    pub fn validate_data(&self, data: &InputData) -> Result<(), IndicatorError> {
         self.candle_validator.validate_candle(data)?;
-        self.parameter_validator.validate_params(params, data)?;
+        Ok(())
+    }
+
+    pub fn validate_params<T: IParameter + Serialize>(&self, data: &InputData, params: &T) -> Result<(), IndicatorError> {
+        self.parameter_validator.validate_params(&params.to_value(), data)?;
+        Ok(())
+    }
+
+    pub fn validate<T: IParameter + Serialize>(&self, data: &InputData, params: &T) -> Result<(), IndicatorError> {
+        self.candle_validator.validate_candle(data)?;
+        self.parameter_validator.validate_params(&params.to_value(), data)?;
         Ok(())
     }
 }
