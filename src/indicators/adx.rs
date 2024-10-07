@@ -35,6 +35,7 @@ fn create_groups() -> HashSet<Group> {
     groups.insert(Group::DataInputType(DataInputType::PriceBased));
     groups.insert(Group::SignalType(SignalType::Lagging));
     groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
+    groups.insert(Group::OutputFormat(OutputFormat::Percentage));
     groups.insert(Group::TimeframeFocus(TimeframeFocus::Short));
     groups.insert(Group::TimeframeFocus(TimeframeFocus::Medium));
     groups.insert(Group::ComplexityLevel(ComplexityLevel::Intermediate));
