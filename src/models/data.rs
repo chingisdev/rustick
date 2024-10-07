@@ -20,6 +20,7 @@ impl InputData {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum OutputData {
     SingleSeries(Array1<f64>),
     MultiSeries(Array2<f64>)

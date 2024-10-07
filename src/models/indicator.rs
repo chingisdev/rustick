@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::models::data::{InputData, OutputData};
 use serde_json::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum IndicatorError {
     InvalidInput(String),
     InvalidParameters(String),
