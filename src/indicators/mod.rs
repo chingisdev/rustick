@@ -3,3 +3,4 @@ mod chaikin_ad_oscillator;
 mod utils;
 mod adx;
 mod adxr;
+mod apo;

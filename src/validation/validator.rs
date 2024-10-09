@@ -101,29 +101,12 @@ impl ParameterValidator {
         }
     }
 
-    fn validate_less_than_data(&self, params: &Value, param_name: &str, data_len: &i64) -> Result<(), IndicatorError> {
-        if let Some(value) = params.get(param_name).and_then(|v| v.as_i64()) {
-            if value < *data_len {
-                Ok(())
-            } else {
-                Err(IndicatorError::InvalidParameters(
-                    format!("Parameter '{}' must be less than {}.", param_name, data_len),
-                ))
-            }
-        } else {
-            Err(IndicatorError::InvalidParameters(
-                format!("Parameter '{}' must be a number.", param_name),
-            ))
-        }
-    }
-
     fn validate_params(&self, params: &Value, data: &InputData) -> Result<(), IndicatorError> {
         for rule in &self.param_rules {
             match rule {
                 ParamRule::Required(param_name) => self.validate_required_param(params, param_name)?,
                 ParamRule::PositiveInteger(param_name) => self.validate_positive_integer_param(params, param_name)?,
                 ParamRule::CorrectPeriod { left, right } => self.validate_correct_period(params, left, right)?,
-                ParamRule::LessThanData {param, data_len } => self.validate_less_than_data(params, param, data_len)?,
                 ParamRule::Custom(func) => {
                     func(params, data)?;
                 }
@@ -162,6 +145,5 @@ pub enum ParamRule {
     Required(&'static str),
     PositiveInteger(&'static str),
     CorrectPeriod { left: &'static str, right: &'static str },
-    LessThanData { param: &'static str, data_len: i64 },
     Custom(Box<dyn Fn(&Value, &InputData) -> Result<(), IndicatorError>>),
 }

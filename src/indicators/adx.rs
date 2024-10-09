@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use ndarray::{s, Array1};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::indicators::utils::{calculate_directional_movements, calculate_true_range, validate_period_less_than_data, wilder_smoothing};
+use crate::indicators::utils::{calculate_directional_movements, calculate_true_range, validate_parameter_within_data_length, wilder_smoothing};
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
@@ -56,7 +56,7 @@ fn create_validator() -> Validator {
         vec![
             ParamRule::Required("period"),
             ParamRule::PositiveInteger("period"),
-            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "period", BarField::HIGH))),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_parameter_within_data_length(value, data, "period", BarField::HIGH))),
         ]
     )
 }
