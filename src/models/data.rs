@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use ndarray::{Array1, Array2};
 
 pub struct InputData {
@@ -23,7 +24,7 @@ impl InputData {
 #[derive(Debug, Clone)]
 pub enum OutputData {
     SingleSeries(Array1<f64>),
-    MultiSeries(Array2<f64>)
+    MultiSeries(HashMap<&'static str, Array1<f64>>)
 }
 
 pub enum BarField {
