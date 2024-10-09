@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use ndarray::{s, Array1};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::indicators::utils::validate_period_less_than_data;
@@ -30,6 +31,7 @@ fn create_groups() -> HashSet<Group> {
     groups.insert(Group::UseCase(UseCase::MomentumDetection));
     groups.insert(Group::UseCase(UseCase::TrendIdentification));
     groups.insert(Group::MathematicalBasis(MathematicalBasis::Differentiation));
+    groups.insert(Group::MathematicalBasis(MathematicalBasis::Oscillation));
     groups.insert(Group::DataInputType(DataInputType::PriceBased));
     groups.insert(Group::SignalType(SignalType::Lagging));
     groups.insert(Group::OutputFormat(OutputFormat::SingleLine));
@@ -83,6 +85,36 @@ impl Indicator for APO {
     }
 
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
-        todo!()
+        let params: APOParams = serde_json::from_value(params)
+            .map_err(|e| IndicatorError::InvalidParameters(e.to_string()))?;
+
+        self.validator.validate(data, &params)?;
+
+        let close = data.get_by_bar_field(&BarField::CLOSE).unwrap();
+
+        let fast_ema = exponential_moving_average(close, params.fast_period);
+        let slow_ema = exponential_moving_average(close, params.slow_period);
+
+        let apo_values = fast_ema - slow_ema;
+
+        Ok(OutputData::SingleSeries(apo_values))
     }
+}
+
+pub fn exponential_moving_average(
+    data: &Array1<f64>,
+    period: usize,
+) -> Array1<f64> {
+    let length = data.len();
+    let mut ema = Array1::<f64>::from_elem(length, f64::NAN);
+    let multiplier = 2.0 / (period as f64 + 1.0);
+
+    let initial_sma = data.slice(s![..period]).mean().unwrap();
+    ema[period - 1] = initial_sma;
+
+    for i in period..length {
+        ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
+    }
+
+    ema
 }
