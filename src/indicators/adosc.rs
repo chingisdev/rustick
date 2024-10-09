@@ -9,14 +9,14 @@ use crate::models::indicator::{Indicator, IndicatorError};
 use crate::validation::validator::{IParameter, ParamRule, Validator};
 
 #[derive(Deserialize, Serialize)]
-struct ChaikinOscillatorParams {
+struct ADOSCParams {
     #[serde(default = "default_short_period")]
     short_period: usize,
     #[serde(default = "default_long_period")]
     long_period: usize,
 }
 
-impl IParameter for ChaikinOscillatorParams {}
+impl IParameter for ADOSCParams {}
 
 fn default_short_period() -> usize {
     3
@@ -27,7 +27,7 @@ fn default_long_period() -> usize {
 }
 
 
-pub struct ChaikinADOscillator {
+pub struct ADOSC {
     groups: HashSet<Group>,
     validator: Validator,
 }
@@ -49,7 +49,7 @@ fn create_validator() -> Validator {
     )
 }
 
-impl ChaikinADOscillator {
+impl ADOSC {
     pub fn new() -> Self {
         let groups = create_groups();
         let validator = create_validator();
@@ -80,7 +80,7 @@ fn create_groups() -> HashSet<Group> {
     groups
 }
 
-impl Indicator for ChaikinADOscillator {
+impl Indicator for ADOSC {
     fn short_name(&self) -> &'static str {
         "ADOSC"
     }
@@ -94,7 +94,7 @@ impl Indicator for ChaikinADOscillator {
     }
 
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
-        let params: ChaikinOscillatorParams = serde_json::from_value(params)
+        let params: ADOSCParams = serde_json::from_value(params)
             .map_err(|e| IndicatorError::InvalidParameters(e.to_string()))?;
 
         self.validator.validate(data, &params)?;
@@ -141,7 +141,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Use default parameters
         let params = json!({});
@@ -179,7 +179,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Set short_period to zero
         let params = json!({ "short_period": 0, "long_period": 3 });
@@ -205,7 +205,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Set long_period to zero
         let params = json!({ "short_period": 2, "long_period": 0 });
@@ -234,7 +234,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Set short_period equal to long_period
         let params = json!({ "short_period": 3, "long_period": 3 });
@@ -263,7 +263,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Set short_period greater than data length
         let params = json!({ "short_period": 5, "long_period": 6 });
@@ -293,7 +293,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Set long_period greater than data length
         let params = json!({ "short_period": 2, "long_period": 5 });
@@ -323,7 +323,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         let params = json!({});
 
@@ -351,7 +351,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         let params = json!({});
 
@@ -378,7 +378,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         let params = json!({});
 
@@ -405,7 +405,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         let params = json!({});
 
@@ -432,7 +432,7 @@ mod tests {
             volume: None, // Missing
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         let params = json!({});
 
@@ -460,7 +460,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         // Default periods are 3 and 10, but data length is 2
         let params = json!({});
@@ -489,7 +489,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADOscillator::new();
+        let indicator = ADOSC::new();
 
         let params = json!({});
 

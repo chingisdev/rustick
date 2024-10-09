@@ -1,5 +1,5 @@
-pub mod chaikin_ad_line;
-mod chaikin_ad_oscillator;
+pub mod ad;
+mod adosc;
 mod utils;
 mod adx;
 mod adxr;

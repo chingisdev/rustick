@@ -6,7 +6,7 @@ use crate::models::groups::{Group, UseCase, MathematicalBasis, DataInputType, Si
 use crate::models::indicator::{Indicator, IndicatorError};
 use crate::validation::validator::Validator;
 
-pub struct ChaikinADLine {
+pub struct AD {
     groups: HashSet<Group>,
     validator: Validator
 }
@@ -38,7 +38,7 @@ fn create_validator() -> Validator {
     )
 }
 
-impl ChaikinADLine {
+impl AD {
     pub fn new() -> Self {
         let validator = create_validator();
         let groups = create_groups();
@@ -46,7 +46,7 @@ impl ChaikinADLine {
     }
 }
 
-impl Indicator for ChaikinADLine {
+impl Indicator for AD {
     fn short_name(&self) -> &'static str {
         "AD"
     }
@@ -97,7 +97,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADLine::new();
+        let indicator = AD::new();
 
         // No parameters are needed for Chaikin A/D Line
         let params = Value::Null;
@@ -144,7 +144,7 @@ mod tests {
             volume: Some(volume),
         };
 
-        let indicator = ChaikinADLine::new();
+        let indicator = AD::new();
 
         let params = Value::Null;
 
