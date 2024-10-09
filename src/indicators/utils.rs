@@ -202,3 +202,21 @@ mod tests {
         }
     }
 }
+
+pub fn exponential_moving_average(
+    data: &Array1<f64>,
+    period: usize,
+) -> Array1<f64> {
+    let length = data.len();
+    let mut ema = Array1::<f64>::from_elem(length, f64::NAN);
+    let multiplier = 2.0 / (period as f64 + 1.0);
+
+    let initial_sma = data.slice(s![..period]).mean().unwrap();
+    ema[period - 1] = initial_sma;
+
+    for i in period..length {
+        ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
+    }
+
+    ema
+}

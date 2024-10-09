@@ -1,12 +1,13 @@
 use std::collections::HashSet;
-use ndarray::{s, Array1};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::indicators::utils;
 use crate::indicators::utils::validate_parameter_within_data_length;
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
 use crate::validation::validator::{IParameter, ParamRule, Validator};
+use utils::exponential_moving_average;
 
 #[derive(Serialize, Deserialize)]
 pub struct APOParams {
@@ -99,24 +100,6 @@ impl Indicator for APO {
 
         Ok(OutputData::SingleSeries(apo_values))
     }
-}
-
-pub fn exponential_moving_average(
-    data: &Array1<f64>,
-    period: usize,
-) -> Array1<f64> {
-    let length = data.len();
-    let mut ema = Array1::<f64>::from_elem(length, f64::NAN);
-    let multiplier = 2.0 / (period as f64 + 1.0);
-
-    let initial_sma = data.slice(s![..period]).mean().unwrap();
-    ema[period - 1] = initial_sma;
-
-    for i in period..length {
-        ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
-    }
-
-    ema
 }
 
 
