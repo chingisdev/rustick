@@ -9,9 +9,6 @@ pub fn calculate_adl(
     close: &Array1<f64>,
     volume: &Array1<f64>,
 ) -> Result<Array1<f64>, IndicatorError> {
-    let length = high.len();
-
-    // Compute the high_low_range (High - Low)
     let high_low_range = high - low;
 
     // To avoid division by zero, create a mask where high_low_range == 0.0
@@ -114,8 +111,6 @@ pub fn calculate_directional_movements(
     let up_move = &high.slice(s![1..]) - &high.slice(s![..high.len() - 1]);
     let down_move = &low.slice(s![..low.len() - 1]) - &low.slice(s![1..]);
 
-    let zero_array = Array1::<f64>::zeros(up_move.len());
-
     let plus_dm = get_signed_directional_movement(&up_move, &down_move);
 
     let minus_dm = get_signed_directional_movement(&down_move, &up_move);
@@ -156,11 +151,11 @@ pub fn wilder_smoothing(
     Ok(smoothed)
 }
 
-pub fn validate_period_less_than_data(value: &Value, data: &InputData, field: &str, bar_field: BarField) -> Result<(), IndicatorError> {
-    let period = value.get(field).and_then(|v| v.as_i64()).unwrap();
+pub fn validate_parameter_within_data_length(value: &Value, data: &InputData, parameter: &str, bar_field: BarField) -> Result<(), IndicatorError> {
+    let period = value.get(parameter).and_then(|v| v.as_i64()).unwrap();
     let input_field = data.get_by_bar_field(&bar_field).unwrap();
     if period > input_field.len() as i64 {
-        Err(IndicatorError::InvalidParameters(format!("Wrong parameter length. '{}' > data length. ({} > {})", field, period, input_field.len())))
+        Err(IndicatorError::InvalidParameters(format!("Wrong parameter length. '{}' > data length. ({} > {})", parameter, period, input_field.len())))
     } else {
         Ok(())
     }

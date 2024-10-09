@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use ndarray::{s, Array1};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::indicators::utils::validate_period_less_than_data;
+use crate::indicators::utils::validate_parameter_within_data_length;
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
@@ -57,8 +57,8 @@ fn create_validator() -> Validator {
             ParamRule::PositiveInteger("fast_period"),
             ParamRule::PositiveInteger("slow_period"),
             ParamRule::CorrectPeriod { left: "fast_period", right: "slow_period" },
-            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "fast_period", BarField::CLOSE))),
-            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "slow_period", BarField::CLOSE))),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_parameter_within_data_length(value, data, "fast_period", BarField::CLOSE))),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_parameter_within_data_length(value, data, "slow_period", BarField::CLOSE))),
         ],
     )
 }
