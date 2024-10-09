@@ -2,10 +2,11 @@ use std::collections::{HashMap, HashSet};
 use ndarray::{s, Array1};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::indicators::utils::validate_parameter_within_data_length;
 use crate::models::data::{BarField, InputData, OutputData};
 use crate::models::groups::{CalculationMethodology, ComplexityLevel, DataInputType, Group, MarketSuitability, MathematicalBasis, OutputFormat, SignalInterpretation, SignalType, SmoothingTechnique, TimeframeFocus, TradingStrategySuitability, UseCase};
 use crate::models::indicator::{Indicator, IndicatorError};
-use crate::validation::validator::{IParameter, Validator};
+use crate::validation::validator::{IParameter, ParamRule, Validator};
 
 #[derive(Serialize, Deserialize)]
 pub struct AROONParams {
@@ -59,8 +60,13 @@ fn create_groups() -> HashSet<Group> {
 
 fn create_validator() -> Validator {
     Validator::new(
-        vec![],
-        vec![]
+        vec![BarField::HIGH, BarField::LOW],
+        vec![
+            ParamRule::Required("period"),
+            ParamRule::PositiveInteger("period"),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_parameter_within_data_length(value, data, "period", BarField::HIGH))),
+            ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_parameter_within_data_length(value, data, "period", BarField::LOW))),
+        ]
     )
 }
 
