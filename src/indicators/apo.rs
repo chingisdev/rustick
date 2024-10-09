@@ -23,7 +23,7 @@ impl IParameter for APOParams {}
 
 pub struct APO {
     groups: HashSet<Group>,
-    validator: Validator
+    validator: Validator,
 }
 
 fn create_groups() -> HashSet<Group> {
@@ -56,10 +56,10 @@ fn create_validator() -> Validator {
             ParamRule::Required("slow_period"),
             ParamRule::PositiveInteger("fast_period"),
             ParamRule::PositiveInteger("slow_period"),
-            ParamRule::CorrectPeriod {left: "fast_period", right: "slow_period"},
+            ParamRule::CorrectPeriod { left: "fast_period", right: "slow_period" },
             ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "fast_period", BarField::CLOSE))),
             ParamRule::Custom(Box::new(|value: &Value, data: &InputData| validate_period_less_than_data(value, data, "slow_period", BarField::CLOSE))),
-        ]
+        ],
     )
 }
 
@@ -117,4 +117,117 @@ pub fn exponential_moving_average(
     }
 
     ema
+}
+
+
+#[cfg(test)]
+mod tests {
+    use ndarray::array;
+    use serde_json::json;
+    use crate::models::data::InputData;
+    use super::*;
+
+    #[test]
+    fn test_apo_same_length_with_input() {
+        let close = array![
+            22.27, 22.19, 22.08, 22.17, 22.18, 22.13, 22.23, 22.43, 22.24, 22.29,
+            22.15, 22.39, 22.38, 22.61, 23.36, 24.05, 23.75, 23.83, 23.95, 23.63,
+            23.82, 23.87, 23.65, 23.19, 23.10, 23.33, 22.68, 23.10, 22.40, 22.17
+        ];
+        let input_data = InputData {
+            open: None,
+            high: None,
+            low: None,
+            close: Some(close.clone()),
+            volume: None,
+        };
+
+        let indicator = APO::new();
+
+        let params = json!({ "fast_period": 12, "slow_period": 26 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::SingleSeries(apo_values) = result {
+            println!("APO values: {:?}", apo_values);
+
+            assert_eq!(apo_values.len(), close.len());
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_apo_nan_consistency() {
+        let close = array![
+            22.27, 22.19, 22.08, 22.17, 22.18, 22.13, 22.23, 22.43, 22.24, 22.29,
+            22.15, 22.39, 22.38, 22.61, 23.36, 24.05, 23.75, 23.83, 23.95, 23.63,
+            23.82, 23.87, 23.65, 23.19, 23.10, 23.33, 22.68, 23.10, 22.40, 22.17
+        ];
+        let input_data = InputData {
+            open: None,
+            high: None,
+            low: None,
+            close: Some(close.clone()),
+            volume: None,
+        };
+
+        let indicator = APO::new();
+
+        let params = json!({ "fast_period": 12, "slow_period": 26 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::SingleSeries(apo_values) = result {
+            println!("APO values: {:?}", apo_values);
+
+            // The first (slow_period - 1) values should be NaN
+            let invalid_length = 26 - 1;
+            for i in 0..invalid_length {
+                assert!(apo_values[i].is_nan(), "Expected NaN at index {}", i);
+            }
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_apo_valid_values() {
+        let close = array![
+            22.27, 22.19, 22.08, 22.17, 22.18, 22.13, 22.23, 22.43, 22.24, 22.29,
+            22.15, 22.39, 22.38, 22.61, 23.36, 24.05, 23.75, 23.83, 23.95, 23.63,
+            23.82, 23.87, 23.65, 23.19, 23.10, 23.33, 22.68, 23.10, 22.40, 22.17
+        ];
+        let input_data = InputData {
+            open: None,
+            high: None,
+            low: None,
+            close: Some(close.clone()),
+            volume: None,
+        };
+
+        let indicator = APO::new();
+
+        let params = json!({ "fast_period": 12, "slow_period": 26 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::SingleSeries(apo_values) = result {
+            println!("APO values: {:?}", apo_values);
+
+            // The first (slow_period - 1) values should be NaN
+            let invalid_length = 26 - 1;
+
+            // Remaining values should be valid numbers
+            for i in invalid_length..apo_values.len() {
+                assert!(
+                    !apo_values[i].is_nan(),
+                    "Expected valid APO value at index {}, found NaN",
+                    i
+                );
+            }
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
 }
