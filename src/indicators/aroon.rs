@@ -104,6 +104,7 @@ impl Indicator for AROON {
         let period = params.period;
         let mut up = Array1::<f64>::from_elem(length, f64::NAN);
         let mut down = Array1::<f64>::from_elem(length, f64::NAN);
+        let mut osc = Array1::<f64>::from_elem(length, f64::NAN);
 
         // Iterate over the valid indices
         for i in (period - 1)..length {
@@ -121,11 +122,13 @@ impl Indicator for AROON {
             // Calculate Aroon Up and Aroon Down
             up[i] = ((high_max_index + 1) as f64 / period as f64) * 100.0;
             down[i] = ((low_min_index + 1) as f64 / period as f64) * 100.0;
+            osc[i] = up[i] - down[i];
         }
 
         let mut output = HashMap::new();
         output.insert("aroon_up", up);
         output.insert("aroon_down", down);
+        output.insert("aroon_osc", osc);
 
         Ok(OutputData::MultiSeries(output))
     }
@@ -161,9 +164,6 @@ mod test {
 
         if let OutputData::MultiSeries(output) = result {
             let aroon_up = output.get("aroon_up").unwrap();
-
-            println!("Aroon Up: {:?}", aroon_up);
-
             // Assert the length is the same as input
             assert_eq!(aroon_up.len(), high.len());
         } else {
@@ -193,9 +193,6 @@ mod test {
 
         if let OutputData::MultiSeries(output) = result {
             let aroon_down = output.get("aroon_down").unwrap();
-
-            println!("Aroon Down: {:?}", aroon_down);
-
             // Assert the length is the same as input
             assert_eq!(aroon_down.len(), high.len());
         } else {
@@ -421,6 +418,142 @@ mod test {
                     "Aroon Down value at index {} is out of bounds: {}",
                     i,
                     aroon_down[i]
+                );
+            }
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_aroon_osc_length() {
+        // Sample high and low price data
+        let high = array![1.0, 2.0, 3.0, 4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0];
+        let low = array![0.5, 1.0, 1.5, 2.0, 1.8, 1.5, 1.2, 1.0, 0.8, 0.5];
+
+        let input_data = InputData {
+            open: None,
+            high: Some(high.clone()),
+            low: Some(low.clone()),
+            close: None,
+            volume: None,
+        };
+
+        let indicator = AROON::new();
+
+        let params = json!({ "period": 5 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::MultiSeries(output) = result {
+            let aroon_osc = output.get("aroon_osc").unwrap();
+            // Assert the length is the same as input
+            assert_eq!(aroon_osc.len(), high.len());
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_aroon_osc_expected_nan() {
+        // Sample high and low price data
+        let high = array![1.0, 2.0, 3.0, 4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0];
+        let low = array![0.5, 1.0, 1.5, 2.0, 1.8, 1.5, 1.2, 1.0, 0.8, 0.5];
+
+        let input_data = InputData {
+            open: None,
+            high: Some(high.clone()),
+            low: Some(low.clone()),
+            close: None,
+            volume: None,
+        };
+
+        let indicator = AROON::new();
+
+        let params = json!({ "period": 5 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::MultiSeries(output) = result {
+            let aroon_osc = output.get("aroon_osc").unwrap();
+            // The first (period - 1) values should be NaN
+            let invalid_length = 5 - 1;
+            for i in 0..invalid_length {
+                assert!(aroon_osc[i].is_nan(), "Expected NaN at index {}", i);
+            }
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_aroon_osc_expected_value() {
+        // Sample high and low price data
+        let high = array![1.0, 2.0, 3.0, 4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0];
+        let low = array![0.5, 1.0, 1.5, 2.0, 1.8, 1.5, 1.2, 1.0, 0.8, 0.5];
+
+        let input_data = InputData {
+            open: None,
+            high: Some(high.clone()),
+            low: Some(low.clone()),
+            close: None,
+            volume: None,
+        };
+
+        let indicator = AROON::new();
+
+        let params = json!({ "period": 5 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::MultiSeries(output) = result {
+            let aroon_osc = output.get("aroon_osc").unwrap();
+            let invalid_length = 5 - 1;
+
+            // Remaining values should be valid numbers between -100 and 100
+            for i in invalid_length..high.len() {
+                assert!(
+                    !aroon_osc[i].is_nan(),
+                    "Expected valid Aroon Oscillator value at index {}, found NaN",
+                    i
+                );
+            }
+        } else {
+            panic!("Unexpected output format");
+        }
+    }
+
+    #[test]
+    fn test_aroon_osc_value_within_bounds() {
+        // Sample high and low price data
+        let high = array![1.0, 2.0, 3.0, 4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0];
+        let low = array![0.5, 1.0, 1.5, 2.0, 1.8, 1.5, 1.2, 1.0, 0.8, 0.5];
+
+        let input_data = InputData {
+            open: None,
+            high: Some(high.clone()),
+            low: Some(low.clone()),
+            close: None,
+            volume: None,
+        };
+
+        let indicator = AROON::new();
+
+        let params = json!({ "period": 5 });
+
+        let result = indicator.calculate(&input_data, params).unwrap();
+
+        if let OutputData::MultiSeries(output) = result {
+            let aroon_osc = output.get("aroon_osc").unwrap();
+            let invalid_length = 5 - 1;
+
+            // Remaining values should be valid numbers between -100 and 100
+            for i in invalid_length..high.len() {
+                assert!(
+                    (-100.0..=100.0).contains(&aroon_osc[i]),
+                    "Aroon Oscillator value at index {} is out of bounds: {}",
+                    i,
+                    aroon_osc[i]
                 );
             }
         } else {
