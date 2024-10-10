@@ -8,3 +8,4 @@ ndarray = "0.16.0"
 ndarray-stats = "0.6.0"
 serde_json = "1.0.128"
 serde = { version = "1.0.210", features = ["derive"] }
+rayon = "1.10.0"

@@ -5,3 +5,4 @@ mod adx;
 mod adxr;
 mod apo;
 mod aroon;
+mod atr;

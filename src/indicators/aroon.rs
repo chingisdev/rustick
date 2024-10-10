@@ -91,7 +91,7 @@ impl Indicator for AROON {
     fn get_groups(&mut self) -> &HashSet<Group> {
         &self.groups
     }
-
+    // It's possible to apply smoothing on osc (EMA), for better indication
     fn calculate(&self, data: &InputData, params: Value) -> Result<OutputData, IndicatorError> {
         let params: AROONParams = serde_json::from_value(params)
             .map_err(|e| IndicatorError::InvalidParameters(e.to_string()))?;
