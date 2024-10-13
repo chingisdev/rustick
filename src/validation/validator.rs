@@ -85,6 +85,18 @@ impl ParameterValidator {
         }
     }
 
+    fn validate_positive_number_param(&self, params: &Value, param_name: &str) -> Result<(), IndicatorError> {
+        if let Some(value) = params.get(param_name).and_then(|v| v.as_f64()) {
+            if value > 0.0 {
+                Ok(())
+            } else {
+                Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be a positive number", param_name)))
+            }
+        } else {
+            Err(IndicatorError::InvalidParameters(format!("Parameter '{}' must be a positive number", param_name)))
+        }
+    }
+
     fn validate_correct_period(&self, params: &Value, left: &str, right: &str) -> Result<(), IndicatorError> {
         if let Some(left_number) = params.get(left).and_then(|v| v.as_i64()) {
             if let Some(right_number) = params.get(right).and_then(|v| v.as_i64()) {
@@ -106,6 +118,7 @@ impl ParameterValidator {
             match rule {
                 ParamRule::Required(param_name) => self.validate_required_param(params, param_name)?,
                 ParamRule::PositiveInteger(param_name) => self.validate_positive_integer_param(params, param_name)?,
+                ParamRule::PositiveNumber(param_name) => self.validate_positive_number_param(params, param_name)?,
                 ParamRule::CorrectPeriod { left, right } => self.validate_correct_period(params, left, right)?,
                 ParamRule::Custom(func) => {
                     func(params, data)?;
@@ -144,6 +157,7 @@ impl Validator {
 pub enum ParamRule {
     Required(&'static str),
     PositiveInteger(&'static str),
+    PositiveNumber(&'static str),
     CorrectPeriod { left: &'static str, right: &'static str },
     Custom(Box<dyn Fn(&Value, &InputData) -> Result<(), IndicatorError>>),
 }
