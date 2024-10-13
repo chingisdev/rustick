@@ -153,6 +153,8 @@ pub enum CalculationMethodology {
     Ratio,
     /// Employs statistical measures (e.g., Standard Deviation).
     Statistical,
+    /// Uses average(s) of values
+    Averaging,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
