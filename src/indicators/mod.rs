@@ -7,3 +7,4 @@ mod apo;
 mod aroon;
 mod atr;
 mod avgprice;
+mod bbands;
